@@ -20,36 +20,55 @@ if not API_KEY:
 client = genai.Client(api_key=API_KEY)
 
 # 测试模型配置列表（串行测试，一个完成后才测下一个）
-# 每个配置包含：name (显示名称), model (模型ID), thinking_level (thinking配置)
-# 注意：Gemini 3 Pro 无法完全关闭 thinking，最低只能设置为 LOW
+# 根据官方文档：https://ai.google.dev/gemini-api/docs/thinking
+# - Gemini 3 使用 thinking_level: "minimal", "low", "high"
+# - Gemini 2.5 使用 thinking_budget: -1(默认), 0(关闭), 或正整数
 MODEL_CONFIGS = [
-    # Flash 模型：测试 LOW 和 HIGH thinking（Flash 可以设置为 0 来关闭）
+    # ===== Gemini 3 Flash 模型：测试不同 thinking_level =====
     {
-        "name": "gemini-3-flash (thinking OFF)",
+        "name": "gemini-3-flash (minimal)",
         "model": "gemini-3-flash-preview",
-        "thinking_budget": 0  # 设置为 0 关闭 thinking
+        "thinking_level": "minimal"  # 最小化思考（模型可能不会思考）
     },
     {
-        "name": "gemini-3-flash (thinking LOW)",
+        "name": "gemini-3-flash (low)",
         "model": "gemini-3-flash-preview",
-        "thinking_level": "low"  # 使用小写字符串
+        "thinking_level": "low"  # 低强度思考
     },
     {
-        "name": "gemini-3-flash (thinking HIGH)",
+        "name": "gemini-3-flash (high)",
         "model": "gemini-3-flash-preview",
-        "thinking_level": "high"  # 使用小写字符串
+        "thinking_level": "high"  # 高强度思考（默认）
     },
 
-    # Pro 模型：只能测试 LOW 和 HIGH（无法完全关闭）
+    # ===== Gemini 3 Pro 模型：只支持 low 和 high =====
+    # 注意：Pro 无法完全关闭思考
     {
-        "name": "gemini-3-pro (thinking LOW)",
+        "name": "gemini-3-pro (low)",
         "model": "gemini-3-pro-preview",
-        "thinking_level": "low"  # 使用小写字符串
+        "thinking_level": "low"  # 低强度思考
     },
     {
-        "name": "gemini-3-pro (thinking HIGH - default)",
+        "name": "gemini-3-pro (high)",
         "model": "gemini-3-pro-preview",
-        "thinking_level": "high"  # 使用小写字符串，这是默认值
+        "thinking_level": "high"  # 高强度思考（默认）
+    },
+
+    # ===== Gemini 2.5 Flash 模型：使用 thinking_budget =====
+    {
+        "name": "gemini-2.5-flash (budget=0)",
+        "model": "gemini-2.5-flash",
+        "thinking_budget": 0  # 关闭思考
+    },
+    {
+        "name": "gemini-2.5-flash (budget=2048)",
+        "model": "gemini-2.5-flash",
+        "thinking_budget": 2048  # 中等预算
+    },
+    {
+        "name": "gemini-2.5-flash (budget=-1)",
+        "model": "gemini-2.5-flash",
+        "thinking_budget": -1  # 默认动态思维
     },
 ]
 
@@ -63,15 +82,15 @@ PROMPTS = [
 # 每个请求会等待完全完成后才开始下一个
 
 
-def test_model_with_timing(model: str, prompt: str, thinking_level = None, thinking_budget: Optional[int] = None) -> Dict:
+def test_model_with_timing(model: str, prompt: str, thinking_level: Optional[str] = None, thinking_budget: Optional[int] = None) -> Dict:
     """
     测试单个模型的响应，记录详细时间数据
 
     Args:
         model: 模型ID
         prompt: 提示词
-        thinking_level: thinking 级别（types.ThinkingLevel.LOW 或 types.ThinkingLevel.HIGH）
-        thinking_budget: thinking 预算（整数，0 表示关闭）
+        thinking_level: thinking 级别（"minimal", "low", "high"）- 用于 Gemini 3
+        thinking_budget: thinking 预算（整数，-1=默认，0=关闭）- 用于 Gemini 2.5
 
     Returns:
         {
@@ -98,12 +117,12 @@ def test_model_with_timing(model: str, prompt: str, thinking_level = None, think
         if thinking_level is not None or thinking_budget is not None:
             thinking_config_kwargs = {}
 
-            if thinking_budget is not None:
-                thinking_config_kwargs["thinking_budget"] = thinking_budget
-                print(f"    [调试] Thinking 配置: thinking_budget={thinking_budget}")
-            elif thinking_level is not None:
+            if thinking_level is not None:
                 thinking_config_kwargs["thinking_level"] = thinking_level
                 print(f"    [调试] Thinking 配置: thinking_level={thinking_level}")
+            elif thinking_budget is not None:
+                thinking_config_kwargs["thinking_budget"] = thinking_budget
+                print(f"    [调试] Thinking 配置: thinking_budget={thinking_budget}")
 
             request_params["config"] = types.GenerateContentConfig(
                 thinking_config=types.ThinkingConfig(**thinking_config_kwargs)
@@ -208,7 +227,7 @@ def run_performance_test():
 
         print(f"📊 测试配置 {config_idx}/{len(MODEL_CONFIGS)}: {config_name}")
         print(f"   模型: {model_id}")
-        if thinking_level:
+        if thinking_level is not None:
             print(f"   Thinking Level: {thinking_level}")
         if thinking_budget is not None:
             print(f"   Thinking Budget: {thinking_budget}")
@@ -305,28 +324,44 @@ def print_comparison_table(results: Dict):
     print("\n📈 分组对比分析:")
     print("-" * 120)
 
-    # Flash 模型对比
-    print("\n🔵 Flash 模型 - Thinking 配置对比:")
-    flash_configs = ["gemini-3-flash (thinking OFF)", "gemini-3-flash (thinking LOW)", "gemini-3-flash (thinking HIGH)"]
-    flash_results_list = []
-    for config_name in flash_configs:
+    # Gemini 3 Flash 模型对比
+    print("\n🔵 Gemini 3 Flash - Thinking Level 对比:")
+    flash3_configs = [
+        "gemini-3-flash (minimal)",
+        "gemini-3-flash (low)",
+        "gemini-3-flash (high)"
+    ]
+    for config_name in flash3_configs:
         config_data = results.get(config_name, {})
         if config_data:
             print(f"   {config_name:<35} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
-            flash_results_list.append((config_name, config_data))
 
-    # 计算 Flash 的时间差异
-    if len(flash_results_list) >= 2:
-        flash_off = results.get("gemini-3-flash (thinking OFF)", {})
-        flash_high = results.get("gemini-3-flash (thinking HIGH)", {})
-        if flash_off and flash_high and flash_off.get('total_time', 0) > 0:
-            time_diff = ((flash_high.get('total_time', 0) - flash_off.get('total_time', 0)) / flash_off.get('total_time', 1)) * 100
-            print(f"   时间差异: {time_diff:+.1f}% (HIGH vs OFF)")
+    # 计算时间差异
+    flash_min = results.get("gemini-3-flash (minimal)", {})
+    flash_high = results.get("gemini-3-flash (high)", {})
+    if flash_min and flash_high and flash_min.get('total_time', 0) > 0:
+        time_diff = ((flash_high.get('total_time', 0) - flash_min.get('total_time', 0)) / flash_min.get('total_time', 1)) * 100
+        print(f"   时间差异: {time_diff:+.1f}% (high vs minimal)")
 
-    # Pro 模型对比
-    print("\n🟣 Pro 模型 - Thinking 配置对比 (注意：Pro 无法完全关闭 thinking):")
-    pro_configs = ["gemini-3-pro (thinking LOW)", "gemini-3-pro (thinking HIGH - default)"]
-    for config_name in pro_configs:
+    # Gemini 3 Pro 模型对比
+    print("\n🟣 Gemini 3 Pro - Thinking Level 对比:")
+    pro3_configs = [
+        "gemini-3-pro (low)",
+        "gemini-3-pro (high)"
+    ]
+    for config_name in pro3_configs:
+        config_data = results.get(config_name, {})
+        if config_data:
+            print(f"   {config_name:<35} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
+
+    # Gemini 2.5 Flash 模型对比
+    print("\n🟢 Gemini 2.5 Flash - Thinking Budget 对比:")
+    flash25_configs = [
+        "gemini-2.5-flash (budget=0)",
+        "gemini-2.5-flash (budget=2048)",
+        "gemini-2.5-flash (budget=-1)"
+    ]
+    for config_name in flash25_configs:
         config_data = results.get(config_name, {})
         if config_data:
             print(f"   {config_name:<35} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
@@ -361,6 +396,7 @@ def save_results(results: Dict):
     output = {
         'timestamp': timestamp,
         'test_type': 'thinking_config_comparison',
+        'note': 'Testing Gemini 3 (thinking_level) and 2.5 (thinking_budget) models',
         'configurations': [
             {
                 'name': config['name'],
