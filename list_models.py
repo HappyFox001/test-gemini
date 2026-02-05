@@ -4,8 +4,16 @@
 """
 
 from google import genai
+import os
 
-API_KEY = "AIzaSyCwZrY_wdEnT_g8mWsvTc3kjFZg7h1HsVY"
+# 从环境变量读取 API Key
+API_KEY = os.getenv('GEMINI_API_KEY')
+if not API_KEY:
+    print("\n❌ 错误: 未设置环境变量 GEMINI_API_KEY\n")
+    print("请先设置:")
+    print("  export GEMINI_API_KEY='your-api-key-here'")
+    print("\n或者运行: source .env\n")
+    exit(1)
 
 try:
     client = genai.Client(api_key=API_KEY)

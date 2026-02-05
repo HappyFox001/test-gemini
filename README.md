@@ -1,55 +1,44 @@
 # Gemini 模型对比测试
 
-测试 Gemini 2.5 Pro 和 3.0 Pro 在响应延时和情感交互质量上的表现。
+对比测试 Gemini 模型在响应延时和情感交互质量上的表现。
 
-## 安装依赖
-
-```bash
-pip install -r requirements.txt
-```
-
-## 配置 API Key
-
-确保已设置 Google AI API Key 环境变量：
+## 快速开始
 
 ```bash
-export GOOGLE_API_KEY="your-api-key-here"
+# 1. 安装依赖
+pip3 install google-genai
+
+# 2. 设置 API Key
+export GEMINI_API_KEY='your-api-key-here'
+
+# 3. 运行测试
+python3 test_gemini_models.py
+
+# 或使用脚本
+./run_test.sh
 ```
 
-或者在代码中配置（不推荐）。
+## 获取 API Key
 
-## 运行测试
+https://aistudio.google.com/app/apikey
+
+## 查看可用模型
 
 ```bash
-python test_gemini_models.py
+export GEMINI_API_KEY='your-api-key-here'
+python3 list_models.py
 ```
 
-## 测试内容
+## 配置
 
-脚本会测试 6 个情感交互场景：
+编辑 `test_gemini_models.py` 文件：
 
-1. **表达焦虑寻求安慰** - 测试共情能力和安慰话术
-2. **失败后需要鼓励** - 测试鼓励话术和情绪疏导
-3. **分享喜悦** - 测试情感共鸣和互动自然度
-4. **处理人际冲突** - 测试情感理解和建议实用性
-5. **孤独感倾诉** - 测试倾听质量和共情深度
-6. **自我怀疑** - 测试认知引导和鼓励方式
+- **MODELS**: 修改要测试的模型列表
+- **REQUEST_GAP**: 修改请求间隔时间（秒）
+- **TEST_PROMPT**: 修改测试提示词
 
-## 输出结果
+## 输出
 
-- 控制台会实时显示每个测试的结果
-- 测试完成后会显示总结报告，包括平均响应时间对比
-- 详细结果会保存到 JSON 文件中（格式：`test_results_YYYYMMDD_HHMMSS.json`）
-
-## 评估维度
-
-- **响应延时**: 从发送请求到收到完整响应的时间
-- **情感共鸣**: 模型是否能理解和回应用户的情感状态
-- **回复质量**: 包括共情能力、建议实用性、语气温暖度等
-- **自然度**: 交互是否自然流畅，像真实的人际对话
-
-## 注意事项
-
-- 每次测试之间会有 1 秒延迟，避免请求过快
-- 如需修改测试用例，编辑脚本中的 `EMOTION_TEST_CASES` 列表
-- 如需测试其他模型，修改 `MODELS` 列表
+- 实时显示每个模型的响应时间和回复内容
+- 总结报告显示速度对比
+- 结果自动保存到 `test_results_*.json` 文件

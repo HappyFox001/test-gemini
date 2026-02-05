@@ -11,7 +11,13 @@ from google import genai
 from typing import Dict, Tuple
 
 # 初始化客户端
-API_KEY = "AIzaSyBpVmyRpRlS37JrR9vMN5tW-edbwr8WCrg"
+import os
+
+# 从环境变量读取 API Key
+API_KEY = os.getenv('GEMINI_API_KEY')
+if not API_KEY:
+    raise ValueError("请设置环境变量 GEMINI_API_KEY")
+
 client = genai.Client(api_key=API_KEY)
 
 # 测试模型列表
