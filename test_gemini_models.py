@@ -18,12 +18,51 @@ if not API_KEY:
 
 client = genai.Client(api_key=API_KEY)
 
-# 测试模型列表（串行测试，一个完成后才测下一个）
-MODELS = [
-    "gemini-2.5-flash",
-    "gemini-3-flash-preview",
-    "gemini-3-pro-preview",
-    "gemini-2.5-pro",
+# 测试模型配置列表（串行测试，一个完成后才测下一个）
+# 每个配置包含：name (显示名称), model (模型ID), thinking_config (thinking配置)
+MODEL_CONFIGS = [
+    # Flash 模型：测试开启和关闭 thinking
+    {
+        "name": "gemini-3-flash (thinking ON)",
+        "model": "gemini-3-flash-preview",
+        "thinking_config": {"mode": "THINKING_MODE_ENABLED"}
+    },
+    {
+        "name": "gemini-3-flash (thinking OFF)",
+        "model": "gemini-3-flash-preview",
+        "thinking_config": {"mode": "THINKING_MODE_DISABLED"}
+    },
+
+    # Pro 模型：测试是否可关闭 thinking 以及不同强度
+    {
+        "name": "gemini-3-pro (thinking OFF)",
+        "model": "gemini-3-pro-preview",
+        "thinking_config": {"mode": "THINKING_MODE_DISABLED"}
+    },
+    {
+        "name": "gemini-3-pro (thinking LOW)",
+        "model": "gemini-3-pro-preview",
+        "thinking_config": {
+            "mode": "THINKING_MODE_ENABLED",
+            "thinking_budget": "LOW"
+        }
+    },
+    {
+        "name": "gemini-3-pro (thinking MEDIUM)",
+        "model": "gemini-3-pro-preview",
+        "thinking_config": {
+            "mode": "THINKING_MODE_ENABLED",
+            "thinking_budget": "MEDIUM"
+        }
+    },
+    {
+        "name": "gemini-3-pro (thinking HIGH)",
+        "model": "gemini-3-pro-preview",
+        "thinking_config": {
+            "mode": "THINKING_MODE_ENABLED",
+            "thinking_budget": "HIGH"
+        }
+    },
 ]
 
 # 两轮对话的提示词
@@ -36,9 +75,14 @@ PROMPTS = [
 # 每个请求会等待完全完成后才开始下一个
 
 
-def test_model_with_timing(model: str, prompt: str) -> Dict:
+def test_model_with_timing(model: str, prompt: str, thinking_config: Dict = None) -> Dict:
     """
     测试单个模型的响应，记录详细时间数据
+
+    Args:
+        model: 模型ID
+        prompt: 提示词
+        thinking_config: thinking 配置（可选）
 
     Returns:
         {
@@ -55,11 +99,21 @@ def test_model_with_timing(model: str, prompt: str) -> Dict:
     chunk_count = 0
 
     try:
+        # 构建请求参数
+        request_params = {
+            "model": model,
+            "contents": prompt,
+        }
+
+        # 如果提供了 thinking_config，添加到 generation_config 中
+        if thinking_config:
+            request_params["config"] = {
+                "thinking_config": thinking_config
+            }
+            print(f"    [调试] Thinking 配置: {thinking_config}")
+
         # 使用流式响应来获取首字延时
-        response = client.models.generate_content_stream(
-            model=model,
-            contents=prompt,
-        )
+        response = client.models.generate_content_stream(**request_params)
 
         # 接收流式响应
         for chunk in response:
@@ -131,11 +185,12 @@ def test_network_latency():
 def run_performance_test():
     """运行性能测试"""
     print("\n" + "=" * 80)
-    print("🚀 Gemini 模型延时性能测试 (完全串行)")
+    print("🚀 Gemini 模型延时性能测试 - Thinking 配置对比")
     print("=" * 80)
     print(f"📅 测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 测试模型: {len(MODELS)} 个")
-    print(f"    {', '.join(MODELS)}")
+    print(f"🎯 测试配置: {len(MODEL_CONFIGS)} 个")
+    for config in MODEL_CONFIGS:
+        print(f"    - {config['name']}")
     print(f"💬 对话轮数: {len(PROMPTS)}")
     print(f"🔄 执行模式: 完全串行 (每个请求完成后才开始下一个)")
     print("=" * 80)
@@ -147,12 +202,21 @@ def run_performance_test():
     # 存储所有结果
     all_results = {}
 
-    # 串行测试每个模型（一个完成后才开始下一个）
-    for model_idx, model in enumerate(MODELS, 1):
-        print(f"📊 测试模型 {model_idx}/{len(MODELS)}: {model}")
+    # 串行测试每个模型配置（一个完成后才开始下一个）
+    for config_idx, config in enumerate(MODEL_CONFIGS, 1):
+        config_name = config['name']
+        model_id = config['model']
+        thinking_config = config.get('thinking_config')
+
+        print(f"📊 测试配置 {config_idx}/{len(MODEL_CONFIGS)}: {config_name}")
+        print(f"   模型: {model_id}")
+        if thinking_config:
+            print(f"   Thinking: {thinking_config}")
         print("-" * 80)
 
         model_results = {
+            'model': model_id,
+            'thinking_config': thinking_config,
             'conversations': [],
             'total_length': 0,
             'total_time': 0
@@ -164,7 +228,7 @@ def run_performance_test():
             print(f"提示词: {prompt}")
 
             # 测试响应
-            result = test_model_with_timing(model, prompt)
+            result = test_model_with_timing(model_id, prompt, thinking_config)
 
             # 打印结果
             print(f"├─ 首 chunk 延时: {result.get('first_chunk_time', 0):.3f}秒")
@@ -181,11 +245,11 @@ def run_performance_test():
             if round_num < len(PROMPTS):
                 print()
 
-        all_results[model] = model_results
+        all_results[config_name] = model_results
 
-        # 不添加人工等待，当前模型完成后自动开始下一个
-        if model_idx < len(MODELS):
-            print(f"\n✅ {model} 测试完成，开始下一个模型...\n")
+        # 不添加人工等待，当前配置完成后自动开始下一个
+        if config_idx < len(MODEL_CONFIGS):
+            print(f"\n✅ {config_name} 测试完成，开始下一个配置...\n")
 
         print("=" * 80 + "\n")
 
@@ -200,51 +264,62 @@ def run_performance_test():
 
 def print_comparison_table(results: Dict):
     """打印性能对比表格"""
-    print("\n" + "=" * 80)
-    print("📊 性能对比总结")
-    print("=" * 80 + "\n")
+    print("\n" + "=" * 120)
+    print("📊 性能对比总结 - Thinking 配置影响")
+    print("=" * 120 + "\n")
 
     # 表头
-    print(f"{'指标':<20} {'gemini-3-flash':<20} {'gemini-3-pro':<20}")
-    print("-" * 80)
+    header = f"{'配置名称':<35} {'首字(R1)':<12} {'总时(R1)':<12} {'长度(R1)':<10} {'首字(R2)':<12} {'总时(R2)':<12} {'长度(R2)':<10}"
+    print(header)
+    print("-" * 120)
 
-    # 提取两个模型的结果
-    flash_key = "gemini-3-flash-preview"
-    pro_key = "gemini-3-pro-preview"
+    # 遍历所有配置并打印结果
+    for config_name, config_results in results.items():
+        convs = config_results.get('conversations', [])
 
-    flash_results = results.get(flash_key, {})
-    pro_results = results.get(pro_key, {})
+        # 第一轮数据
+        conv1 = convs[0] if len(convs) > 0 else {}
+        first_token_r1 = conv1.get('first_token_time', 0)
+        total_time_r1 = conv1.get('total_time', 0)
+        length_r1 = conv1.get('response_length', 0)
 
-    # 第一轮对话数据
-    flash_conv1 = flash_results.get('conversations', [{}])[0]
-    pro_conv1 = pro_results.get('conversations', [{}])[0]
+        # 第二轮数据
+        conv2 = convs[1] if len(convs) > 1 else {}
+        first_token_r2 = conv2.get('first_token_time', 0)
+        total_time_r2 = conv2.get('total_time', 0)
+        length_r2 = conv2.get('response_length', 0)
 
-    print(f"{'[第1轮] 首字延时':<20} {flash_conv1.get('first_token_time', 0):.3f}秒{'':<13} {pro_conv1.get('first_token_time', 0):.3f}秒")
-    print(f"{'[第1轮] 总时间':<20} {flash_conv1.get('total_time', 0):.3f}秒{'':<13} {pro_conv1.get('total_time', 0):.3f}秒")
-    print(f"{'[第1轮] 响应长度':<20} {flash_conv1.get('response_length', 0)}字符{'':<13} {pro_conv1.get('response_length', 0)}字符")
-    print()
+        # 打印一行数据
+        row = f"{config_name:<35} {first_token_r1:>7.3f}秒   {total_time_r1:>7.3f}秒   {length_r1:>7}字   {first_token_r2:>7.3f}秒   {total_time_r2:>7.3f}秒   {length_r2:>7}字"
+        print(row)
 
-    # 第二轮对话数据
-    flash_conv2 = flash_results.get('conversations', [{}])[1] if len(flash_results.get('conversations', [])) > 1 else {}
-    pro_conv2 = pro_results.get('conversations', [{}])[1] if len(pro_results.get('conversations', [])) > 1 else {}
+    print("-" * 120)
 
-    print(f"{'[第2轮] 首字延时':<20} {flash_conv2.get('first_token_time', 0):.3f}秒{'':<13} {pro_conv2.get('first_token_time', 0):.3f}秒")
-    print(f"{'[第2轮] 总时间':<20} {flash_conv2.get('total_time', 0):.3f}秒{'':<13} {pro_conv2.get('total_time', 0):.3f}秒")
-    print(f"{'[第2轮] 响应长度':<20} {flash_conv2.get('response_length', 0)}字符{'':<13} {pro_conv2.get('response_length', 0)}字符")
+    # 打印分组对比
+    print("\n📈 分组对比分析:")
+    print("-" * 120)
 
-    print("-" * 80)
+    # Flash 模型对比
+    print("\n🔵 Flash 模型 - Thinking ON vs OFF:")
+    flash_on = results.get("gemini-3-flash (thinking ON)", {})
+    flash_off = results.get("gemini-3-flash (thinking OFF)", {})
+    if flash_on and flash_off:
+        print(f"   Thinking ON  - 总时间: {flash_on.get('total_time', 0):.3f}秒, 总长度: {flash_on.get('total_length', 0)}字")
+        print(f"   Thinking OFF - 总时间: {flash_off.get('total_time', 0):.3f}秒, 总长度: {flash_off.get('total_length', 0)}字")
+        if flash_off.get('total_time', 0) > 0:
+            time_diff = ((flash_on.get('total_time', 0) - flash_off.get('total_time', 0)) / flash_off.get('total_time', 1)) * 100
+            print(f"   时间差异: {time_diff:+.1f}% (ON vs OFF)")
 
-    # 总计
-    print(f"{'总响应长度':<20} {flash_results.get('total_length', 0)}字符{'':<13} {pro_results.get('total_length', 0)}字符")
-    print(f"{'总响应时间':<20} {flash_results.get('total_time', 0):.3f}秒{'':<13} {pro_results.get('total_time', 0):.3f}秒")
+    # Pro 模型对比
+    print("\n🟣 Pro 模型 - Thinking 配置对比:")
+    pro_configs = ["gemini-3-pro (thinking OFF)", "gemini-3-pro (thinking LOW)",
+                   "gemini-3-pro (thinking MEDIUM)", "gemini-3-pro (thinking HIGH)"]
+    for config_name in pro_configs:
+        config_data = results.get(config_name, {})
+        if config_data:
+            print(f"   {config_name:<30} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
 
-    # 计算平均速度（字符/秒）
-    flash_speed = flash_results.get('total_length', 0) / flash_results.get('total_time', 1) if flash_results.get('total_time', 0) > 0 else 0
-    pro_speed = pro_results.get('total_length', 0) / pro_results.get('total_time', 1) if pro_results.get('total_time', 0) > 0 else 0
-
-    print(f"{'平均速度':<20} {flash_speed:.1f}字符/秒{'':<8} {pro_speed:.1f}字符/秒")
-
-    print("\n" + "=" * 80 + "\n")
+    print("\n" + "=" * 120 + "\n")
 
 
 def save_results(results: Dict):
@@ -273,8 +348,15 @@ def save_results(results: Dict):
 
     output = {
         'timestamp': timestamp,
-        'test_type': 'latency_performance',
-        'models': MODELS,
+        'test_type': 'thinking_config_comparison',
+        'configurations': [
+            {
+                'name': config['name'],
+                'model': config['model'],
+                'thinking_config': config.get('thinking_config')
+            }
+            for config in MODEL_CONFIGS
+        ],
         'conversation_rounds': len(PROMPTS),
         'results': simplified_results
     }
