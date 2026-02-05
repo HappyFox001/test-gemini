@@ -49,8 +49,10 @@ def test_model_with_timing(model: str, prompt: str) -> Dict:
         }
     """
     start_time = time.time()
-    first_token_time = None
+    first_chunk_time = None  # 第一个 chunk 到达时间
+    first_token_time = None  # 第一个文本 token 到达时间
     response_text = ""
+    chunk_count = 0
 
     try:
         # 使用流式响应来获取首字延时
@@ -61,9 +63,13 @@ def test_model_with_timing(model: str, prompt: str) -> Dict:
 
         # 接收流式响应
         for chunk in response:
-            # 记录首字延时（第一个 chunk 到达时间）
-            if first_token_time is None:
-                first_token_time = time.time() - start_time
+            chunk_count += 1
+            current_time = time.time() - start_time
+
+            # 记录第一个 chunk 到达时间（无论是否有文本）
+            if first_chunk_time is None:
+                first_chunk_time = current_time
+                print(f"    [调试] 首个 chunk 到达: {first_chunk_time:.3f}秒")
 
             # 提取文本内容
             if hasattr(chunk, 'candidates') and chunk.candidates:
@@ -72,14 +78,21 @@ def test_model_with_timing(model: str, prompt: str) -> Dict:
                     for part in candidate.content.parts:
                         # 只提取文本部分，忽略 thought_signature 等
                         if hasattr(part, 'text') and part.text:
+                            # 记录首字延时（第一个包含文本的 chunk 到达时间）
+                            if first_token_time is None:
+                                first_token_time = current_time
+                                print(f"    [调试] 首个文本到达: {first_token_time:.3f}秒 (chunk #{chunk_count})")
                             response_text += part.text
 
         total_time = time.time() - start_time
+        print(f"    [调试] 总 chunks: {chunk_count}, 总时间: {total_time:.3f}秒")
 
         return {
+            'first_chunk_time': first_chunk_time or 0,
             'first_token_time': first_token_time or 0,
             'total_time': total_time,
             'response_length': len(response_text),
+            'chunk_count': chunk_count,
             'response_text': response_text
         }
 
@@ -129,9 +142,11 @@ def run_performance_test():
             result = test_model_with_timing(model, prompt)
 
             # 打印结果
-            print(f"├─ 首字延时: {result['first_token_time']:.3f}秒")
+            print(f"├─ 首 chunk 延时: {result.get('first_chunk_time', 0):.3f}秒")
+            print(f"├─ 首文本延时: {result['first_token_time']:.3f}秒")
             print(f"├─ 总响应时间: {result['total_time']:.3f}秒")
-            print(f"└─ 响应长度: {result['response_length']}字符")
+            print(f"├─ 响应长度: {result['response_length']}字符")
+            print(f"└─ Chunks 数量: {result.get('chunk_count', 0)}")
 
             model_results['conversations'].append(result)
             model_results['total_length'] += result['response_length']
