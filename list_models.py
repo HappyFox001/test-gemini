@@ -37,13 +37,6 @@ try:
     print("=" * 80)
     print(f"\n找到 {len(gemini_models)} 个 Gemini 模型\n")
 
-    print("💡 建议测试的模型组合:")
-    print("-" * 80)
-    print("选项 1: gemini-1.5-pro 和 gemini-2.0-flash-exp")
-    print("选项 2: gemini-1.5-pro 和 gemini-1.5-flash")
-    print("选项 3: gemini-exp-1206 和 gemini-2.0-flash-exp")
-    print("=" * 80 + "\n")
-
 except Exception as e:
     print(f"\n❌ 错误: {str(e)}\n")
     print("请确保:")
