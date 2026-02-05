@@ -32,24 +32,24 @@ MODEL_CONFIGS = [
     {
         "name": "gemini-3-flash (thinking LOW)",
         "model": "gemini-3-flash-preview",
-        "thinking_level": types.ThinkingLevel.LOW  # 使用枚举类型
+        "thinking_level": "low"  # 使用小写字符串
     },
     {
         "name": "gemini-3-flash (thinking HIGH)",
         "model": "gemini-3-flash-preview",
-        "thinking_level": types.ThinkingLevel.HIGH  # 使用枚举类型
+        "thinking_level": "high"  # 使用小写字符串
     },
 
     # Pro 模型：只能测试 LOW 和 HIGH（无法完全关闭）
     {
         "name": "gemini-3-pro (thinking LOW)",
         "model": "gemini-3-pro-preview",
-        "thinking_level": types.ThinkingLevel.LOW  # 使用枚举类型
+        "thinking_level": "low"  # 使用小写字符串
     },
     {
         "name": "gemini-3-pro (thinking HIGH - default)",
         "model": "gemini-3-pro-preview",
-        "thinking_level": types.ThinkingLevel.HIGH  # 使用枚举类型，这是默认值
+        "thinking_level": "high"  # 使用小写字符串，这是默认值
     },
 ]
 
