@@ -72,11 +72,14 @@ MODEL_CONFIGS = [
     },
 ]
 
-# 两轮对话的提示词
+# 两轮对话的提示词（限制回答长度以加快测试）
 PROMPTS = [
-    "你好，我最近工作压力很大，感觉很焦虑。",
-    "谢谢你的建议，我该如何开始改善这个状况呢？"
+    "你好，我最近工作压力很大，感觉很焦虑。请用10个字以内回答。",
+    "谢谢你的建议，我该如何开始改善这个状况呢？请用10个字以内回答。"
 ]
+
+# 输出 token 限制
+MAX_OUTPUT_TOKENS = 50  # 约等于 10 个中文字
 
 # 不使用硬编码的等待时间，完全依赖同步执行
 # 每个请求会等待完全完成后才开始下一个
@@ -113,20 +116,27 @@ def test_model_with_timing(model: str, prompt: str, thinking_level: Optional[str
             "contents": prompt,
         }
 
+        # 构建配置参数
+        config_kwargs = {
+            "max_output_tokens": MAX_OUTPUT_TOKENS  # 限制输出长度
+        }
+
         # 如果提供了 thinking 配置，添加到 config 中
         if thinking_level is not None or thinking_budget is not None:
             thinking_config_kwargs = {}
 
             if thinking_level is not None:
                 thinking_config_kwargs["thinking_level"] = thinking_level
-                print(f"    [调试] Thinking 配置: thinking_level={thinking_level}")
+                print(f"    [调试] Thinking 配置: thinking_level={thinking_level}, max_tokens={MAX_OUTPUT_TOKENS}")
             elif thinking_budget is not None:
                 thinking_config_kwargs["thinking_budget"] = thinking_budget
-                print(f"    [调试] Thinking 配置: thinking_budget={thinking_budget}")
+                print(f"    [调试] Thinking 配置: thinking_budget={thinking_budget}, max_tokens={MAX_OUTPUT_TOKENS}")
 
-            request_params["config"] = types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(**thinking_config_kwargs)
-            )
+            config_kwargs["thinking_config"] = types.ThinkingConfig(**thinking_config_kwargs)
+        else:
+            print(f"    [调试] 无 Thinking 配置, max_tokens={MAX_OUTPUT_TOKENS}")
+
+        request_params["config"] = types.GenerateContentConfig(**config_kwargs)
 
         # 使用流式响应来获取首字延时
         response = client.models.generate_content_stream(**request_params)
