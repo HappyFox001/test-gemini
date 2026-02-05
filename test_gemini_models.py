@@ -43,33 +43,33 @@ MODEL_CONFIGS = [
 
     # ===== Gemini 3 Pro 模型：只支持 low 和 high =====
     # 注意：Pro 无法完全关闭思考
-    {
-        "name": "gemini-3-pro (low)",
-        "model": "gemini-3-pro-preview",
-        "thinking_level": "low"  # 低强度思考
-    },
-    {
-        "name": "gemini-3-pro (high)",
-        "model": "gemini-3-pro-preview",
-        "thinking_level": "high"  # 高强度思考（默认）
-    },
+    # {
+    #     "name": "gemini-3-pro (low)",
+    #     "model": "gemini-3-pro-preview",
+    #     "thinking_level": "low"  # 低强度思考
+    # },
+    # {
+    #     "name": "gemini-3-pro (high)",
+    #     "model": "gemini-3-pro-preview",
+    #     "thinking_level": "high"  # 高强度思考（默认）
+    # },
 
     # # ===== Gemini 2.5 Flash 模型：使用 thinking_budget =====
-    {
-        "name": "gemini-2.5-flash (budget=0)",
-        "model": "gemini-2.5-flash",
-        "thinking_budget": 0  # 关闭思考
-    },
-    {
-        "name": "gemini-2.5-flash (budget=2048)",
-        "model": "gemini-2.5-flash",
-        "thinking_budget": 2048  # 中等预算
-    },
-    {
-        "name": "gemini-2.5-flash (budget=-1)",
-        "model": "gemini-2.5-flash",
-        "thinking_budget": -1  # 默认动态思维
-    },
+    # {
+    #     "name": "gemini-2.5-flash (budget=0)",
+    #     "model": "gemini-2.5-flash",
+    #     "thinking_budget": 0  # 关闭思考
+    # },
+    # {
+    #     "name": "gemini-2.5-flash (budget=2048)",
+    #     "model": "gemini-2.5-flash",
+    #     "thinking_budget": 2048  # 中等预算
+    # },
+    # {
+    #     "name": "gemini-2.5-flash (budget=-1)",
+    #     "model": "gemini-2.5-flash",
+    #     "thinking_budget": -1  # 默认动态思维
+    # },
 ]
 
 # 两轮对话的提示词（限制回答长度以加快测试）
