@@ -5,3 +5,4 @@ test_results_*.json
 performance_test_*.json
 __pycache__/
 *.pyc
+results
