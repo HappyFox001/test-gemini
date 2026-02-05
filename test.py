@@ -7,7 +7,7 @@ start_time = time.time()
 print(f"Starting content generation at t=0.000s\n")
 
 response = client.models.generate_content_stream(
-    model="gemini-3-flash-preview",
+    model="gemini-2.5-flash",
     contents=["Explain how AI works"]
 )
 
