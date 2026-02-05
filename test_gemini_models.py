@@ -1,59 +1,30 @@
 #!/usr/bin/env python3
 """
 Gemini 模型对比测试脚本
-测试 Gemini 2.5 Pro 和 3.0 Pro 在延时和情感交互质量上的表现
+简化版：单次测试，对比两个模型的延时和回复质量
 """
 
 import time
 import json
 from datetime import datetime
 from google import genai
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 # 初始化客户端
 API_KEY = "AIzaSyCxyrthRXXj15jjxwW31IBzCcoVSP36MxY"
 client = genai.Client(api_key=API_KEY)
 
 # 测试模型列表
-# 根据 list_models.py 的结果更新
 MODELS = [
     "gemini-3-pro-preview",
     "gemini-2.5-pro"
 ]
 
-# 情感交互测试用例
-EMOTION_TEST_CASES = [
-    {
-        "name": "表达焦虑寻求安慰",
-        "prompt": "我最近工作压力特别大，总是担心自己做不好，晚上经常失眠，感觉很焦虑。你能帮我吗？",
-        "评估重点": "共情能力、安慰话术、实用建议"
-    },
-    {
-        "name": "失败后需要鼓励",
-        "prompt": "我今天的项目演示失败了，在所有同事面前出了丑，感觉自己很没用，不知道该怎么办。",
-        "评估重点": "鼓励话术、情绪疏导、积极引导"
-    },
-    {
-        "name": "分享喜悦",
-        "prompt": "太开心了！我终于通过了期待已久的面试，这是我梦想的工作！",
-        "评估重点": "情感共鸣、真诚祝贺、互动自然度"
-    },
-    {
-        "name": "处理人际冲突",
-        "prompt": "我和最好的朋友因为一件小事吵架了，现在很后悔，但不知道该怎么道歉，感觉关系回不到从前了。",
-        "评估重点": "情感理解、建议实用性、语气温和度"
-    },
-    {
-        "name": "孤独感倾诉",
-        "prompt": "搬到新城市后，我一个朋友都没有，每天下班回家都是一个人，感觉特别孤独。",
-        "评估重点": "倾听质量、共情深度、提供支持的方式"
-    },
-    {
-        "name": "自我怀疑",
-        "prompt": "我总觉得自己不够好，看到别人都那么优秀，越来越怀疑自己的价值。",
-        "评估重点": "认知引导、自我价值肯定、鼓励方式"
-    }
-]
+# 请求间隔时间（秒）
+REQUEST_GAP = 1.0
+
+# 测试提示词（情感交互场景）
+TEST_PROMPT = "我最近工作压力特别大，总是担心自己做不好，晚上经常失眠，感觉很焦虑。你能帮我吗？"
 
 
 def test_model_response(model: str, prompt: str) -> Tuple[str, float]:
@@ -91,13 +62,6 @@ def print_separator(char="=", length=80):
     print(char * length)
 
 
-def print_test_header(test_name: str, test_num: int, total: int):
-    """打印测试用例标题"""
-    print_separator()
-    print(f"\n📋 测试 {test_num}/{total}: {test_name}\n")
-    print_separator()
-
-
 def print_model_result(model: str, response: str, latency: float):
     """打印单个模型的结果"""
     print(f"\n🤖 模型: {model}")
@@ -115,100 +79,90 @@ def run_comparison_test():
     print("=" * 80)
     print(f"📅 测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🎯 测试模型: {', '.join(MODELS)}")
-    print(f"📊 测试用例数: {len(EMOTION_TEST_CASES)}")
+    print(f"⏱️  请求间隔: {REQUEST_GAP}秒")
     print("=" * 80 + "\n")
 
-    # 存储所有测试结果
-    all_results = []
+    print(f"📝 测试提示词:")
+    print(f'"{TEST_PROMPT}"')
+    print("\n" + "=" * 80 + "\n")
 
-    # 对每个测试用例进行测试
-    for idx, test_case in enumerate(EMOTION_TEST_CASES, 1):
-        print_test_header(test_case["name"], idx, len(EMOTION_TEST_CASES))
+    # 存储测试结果
+    results = {}
 
-        print(f"\n📝 测试提示词:")
-        print(f'"{test_case["prompt"]}"')
-        print(f"\n🎯 评估重点: {test_case['评估重点']}\n")
+    # 测试每个模型
+    for idx, model in enumerate(MODELS):
+        print(f"⏳ 正在测试 {model}...")
+        response, latency = test_model_response(model, TEST_PROMPT)
 
-        test_result = {
-            "test_name": test_case["name"],
-            "prompt": test_case["prompt"],
-            "evaluation_focus": test_case["评估重点"],
-            "models": {}
+        print_model_result(model, response, latency)
+
+        results[model] = {
+            "response": response,
+            "latency": latency
         }
 
-        # 测试每个模型
-        for model in MODELS:
-            print(f"\n⏳ 正在测试 {model}...")
-            response, latency = test_model_response(model, test_case["prompt"])
-
-            print_model_result(model, response, latency)
-
-            test_result["models"][model] = {
-                "response": response,
-                "latency": latency
-            }
-
-            # 稍微等待，避免请求过快
-            time.sleep(1)
-
-        all_results.append(test_result)
-        print("\n")
+        # 如果不是最后一个模型，等待指定时间
+        if idx < len(MODELS) - 1:
+            print(f"\n⏸️  等待 {REQUEST_GAP} 秒...\n")
+            time.sleep(REQUEST_GAP)
 
     # 打印总结报告
-    print_summary_report(all_results)
+    print_summary_report(results)
 
     # 保存结果到文件
-    save_results(all_results)
+    save_results(results)
 
-    return all_results
+    return results
 
 
-def print_summary_report(results: List[Dict]):
+def print_summary_report(results: Dict):
     """打印总结报告"""
-    print_separator("=")
-    print("\n📊 测试总结报告\n")
-    print_separator("=")
+    print("\n" + "=" * 80)
+    print("📊 测试总结报告")
+    print("=" * 80 + "\n")
 
-    # 计算平均延时
-    latency_stats = {model: [] for model in MODELS}
-
-    for result in results:
-        for model in MODELS:
-            if model in result["models"]:
-                latency = result["models"][model]["latency"]
-                if isinstance(latency, (int, float)):
-                    latency_stats[model].append(latency)
-
-    print("\n⏱️  平均响应时间对比:")
+    print("⏱️  响应时间对比:")
     print("-" * 80)
     for model in MODELS:
-        if latency_stats[model]:
-            avg_latency = sum(latency_stats[model]) / len(latency_stats[model])
-            min_latency = min(latency_stats[model])
-            max_latency = max(latency_stats[model])
-            print(f"{model}:")
-            print(f"  平均: {avg_latency:.3f}秒 | 最小: {min_latency:.3f}秒 | 最大: {max_latency:.3f}秒")
+        if model in results and isinstance(results[model]["latency"], (int, float)):
+            latency = results[model]["latency"]
+            print(f"{model}: {latency:.3f}秒")
         else:
             print(f"{model}: 无有效数据")
+
+    # 计算速度差异
+    latencies = [results[m]["latency"] for m in MODELS if m in results and isinstance(results[m]["latency"], (int, float))]
+    if len(latencies) == 2:
+        faster = MODELS[0] if latencies[0] < latencies[1] else MODELS[1]
+        diff = abs(latencies[0] - latencies[1])
+        percent = (diff / max(latencies)) * 100
+        print(f"\n⚡ {faster} 更快 {diff:.3f}秒 ({percent:.1f}%)")
 
     print("\n" + "=" * 80)
     print("\n💡 评估建议:")
     print("-" * 80)
-    print("1. 仔细阅读每个模型的回复内容")
-    print("2. 对比情感共鸣能力和共情表达")
-    print("3. 评估回复的实用性和可操作性")
+    print("1. 对比两个模型的回复内容质量")
+    print("2. 评估情感共鸣能力和共情表达")
+    print("3. 检查回复的实用性和可操作性")
     print("4. 注意语气的温暖度和自然度")
     print("5. 综合考虑响应速度和质量的平衡")
     print("=" * 80 + "\n")
 
 
-def save_results(results: List[Dict]):
+def save_results(results: Dict):
     """保存测试结果到JSON文件"""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"test_results_{timestamp}.json"
 
+    output = {
+        "timestamp": timestamp,
+        "test_prompt": TEST_PROMPT,
+        "request_gap": REQUEST_GAP,
+        "results": results
+    }
+
     with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+        json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"✅ 测试结果已保存到: {filename}\n")
 
