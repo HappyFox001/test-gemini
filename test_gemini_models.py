@@ -9,7 +9,8 @@ import json
 import os
 from datetime import datetime
 from google import genai
-from typing import Dict, Tuple
+from google.genai import types
+from typing import Dict, Tuple, Optional
 
 # 初始化客户端
 API_KEY = os.getenv('GEMINI_API_KEY')
@@ -19,49 +20,36 @@ if not API_KEY:
 client = genai.Client(api_key=API_KEY)
 
 # 测试模型配置列表（串行测试，一个完成后才测下一个）
-# 每个配置包含：name (显示名称), model (模型ID), thinking_config (thinking配置)
+# 每个配置包含：name (显示名称), model (模型ID), thinking_level (thinking配置)
+# 注意：Gemini 3 Pro 无法完全关闭 thinking，最低只能设置为 LOW
 MODEL_CONFIGS = [
-    # Flash 模型：测试开启和关闭 thinking
-    {
-        "name": "gemini-3-flash (thinking ON)",
-        "model": "gemini-3-flash-preview",
-        "thinking_config": {"mode": "THINKING_MODE_ENABLED"}
-    },
+    # Flash 模型：测试 LOW 和 HIGH thinking（Flash 可以设置为 0 来关闭）
     {
         "name": "gemini-3-flash (thinking OFF)",
         "model": "gemini-3-flash-preview",
-        "thinking_config": {"mode": "THINKING_MODE_DISABLED"}
+        "thinking_budget": 0  # 设置为 0 关闭 thinking
+    },
+    {
+        "name": "gemini-3-flash (thinking LOW)",
+        "model": "gemini-3-flash-preview",
+        "thinking_level": "LOW"
+    },
+    {
+        "name": "gemini-3-flash (thinking HIGH)",
+        "model": "gemini-3-flash-preview",
+        "thinking_level": "HIGH"
     },
 
-    # Pro 模型：测试是否可关闭 thinking 以及不同强度
-    {
-        "name": "gemini-3-pro (thinking OFF)",
-        "model": "gemini-3-pro-preview",
-        "thinking_config": {"mode": "THINKING_MODE_DISABLED"}
-    },
+    # Pro 模型：只能测试 LOW 和 HIGH（无法完全关闭）
     {
         "name": "gemini-3-pro (thinking LOW)",
         "model": "gemini-3-pro-preview",
-        "thinking_config": {
-            "mode": "THINKING_MODE_ENABLED",
-            "thinking_budget": "LOW"
-        }
+        "thinking_level": "LOW"
     },
     {
-        "name": "gemini-3-pro (thinking MEDIUM)",
+        "name": "gemini-3-pro (thinking HIGH - default)",
         "model": "gemini-3-pro-preview",
-        "thinking_config": {
-            "mode": "THINKING_MODE_ENABLED",
-            "thinking_budget": "MEDIUM"
-        }
-    },
-    {
-        "name": "gemini-3-pro (thinking HIGH)",
-        "model": "gemini-3-pro-preview",
-        "thinking_config": {
-            "mode": "THINKING_MODE_ENABLED",
-            "thinking_budget": "HIGH"
-        }
+        "thinking_level": "HIGH"  # 这是默认值
     },
 ]
 
@@ -75,14 +63,15 @@ PROMPTS = [
 # 每个请求会等待完全完成后才开始下一个
 
 
-def test_model_with_timing(model: str, prompt: str, thinking_config: Dict = None) -> Dict:
+def test_model_with_timing(model: str, prompt: str, thinking_level: Optional[str] = None, thinking_budget: Optional[int] = None) -> Dict:
     """
     测试单个模型的响应，记录详细时间数据
 
     Args:
         model: 模型ID
         prompt: 提示词
-        thinking_config: thinking 配置（可选）
+        thinking_level: thinking 级别（"LOW" 或 "HIGH"）
+        thinking_budget: thinking 预算（整数，0 表示关闭）
 
     Returns:
         {
@@ -105,12 +94,20 @@ def test_model_with_timing(model: str, prompt: str, thinking_config: Dict = None
             "contents": prompt,
         }
 
-        # 如果提供了 thinking_config，添加到 generation_config 中
-        if thinking_config:
-            request_params["config"] = {
-                "thinking_config": thinking_config
-            }
-            print(f"    [调试] Thinking 配置: {thinking_config}")
+        # 如果提供了 thinking 配置，添加到 config 中
+        if thinking_level is not None or thinking_budget is not None:
+            thinking_config_dict = {}
+
+            if thinking_budget is not None:
+                thinking_config_dict["thinking_budget"] = thinking_budget
+                print(f"    [调试] Thinking 配置: thinking_budget={thinking_budget}")
+            elif thinking_level is not None:
+                thinking_config_dict["thinking_level"] = thinking_level
+                print(f"    [调试] Thinking 配置: thinking_level={thinking_level}")
+
+            request_params["config"] = types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(**thinking_config_dict)
+            )
 
         # 使用流式响应来获取首字延时
         response = client.models.generate_content_stream(**request_params)
@@ -206,17 +203,21 @@ def run_performance_test():
     for config_idx, config in enumerate(MODEL_CONFIGS, 1):
         config_name = config['name']
         model_id = config['model']
-        thinking_config = config.get('thinking_config')
+        thinking_level = config.get('thinking_level')
+        thinking_budget = config.get('thinking_budget')
 
         print(f"📊 测试配置 {config_idx}/{len(MODEL_CONFIGS)}: {config_name}")
         print(f"   模型: {model_id}")
-        if thinking_config:
-            print(f"   Thinking: {thinking_config}")
+        if thinking_level:
+            print(f"   Thinking Level: {thinking_level}")
+        if thinking_budget is not None:
+            print(f"   Thinking Budget: {thinking_budget}")
         print("-" * 80)
 
         model_results = {
             'model': model_id,
-            'thinking_config': thinking_config,
+            'thinking_level': thinking_level,
+            'thinking_budget': thinking_budget,
             'conversations': [],
             'total_length': 0,
             'total_time': 0
@@ -228,7 +229,12 @@ def run_performance_test():
             print(f"提示词: {prompt}")
 
             # 测试响应
-            result = test_model_with_timing(model_id, prompt, thinking_config)
+            result = test_model_with_timing(
+                model_id,
+                prompt,
+                thinking_level=thinking_level,
+                thinking_budget=thinking_budget
+            )
 
             # 打印结果
             print(f"├─ 首 chunk 延时: {result.get('first_chunk_time', 0):.3f}秒")
@@ -300,24 +306,30 @@ def print_comparison_table(results: Dict):
     print("-" * 120)
 
     # Flash 模型对比
-    print("\n🔵 Flash 模型 - Thinking ON vs OFF:")
-    flash_on = results.get("gemini-3-flash (thinking ON)", {})
-    flash_off = results.get("gemini-3-flash (thinking OFF)", {})
-    if flash_on and flash_off:
-        print(f"   Thinking ON  - 总时间: {flash_on.get('total_time', 0):.3f}秒, 总长度: {flash_on.get('total_length', 0)}字")
-        print(f"   Thinking OFF - 总时间: {flash_off.get('total_time', 0):.3f}秒, 总长度: {flash_off.get('total_length', 0)}字")
-        if flash_off.get('total_time', 0) > 0:
-            time_diff = ((flash_on.get('total_time', 0) - flash_off.get('total_time', 0)) / flash_off.get('total_time', 1)) * 100
-            print(f"   时间差异: {time_diff:+.1f}% (ON vs OFF)")
+    print("\n🔵 Flash 模型 - Thinking 配置对比:")
+    flash_configs = ["gemini-3-flash (thinking OFF)", "gemini-3-flash (thinking LOW)", "gemini-3-flash (thinking HIGH)"]
+    flash_results_list = []
+    for config_name in flash_configs:
+        config_data = results.get(config_name, {})
+        if config_data:
+            print(f"   {config_name:<35} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
+            flash_results_list.append((config_name, config_data))
+
+    # 计算 Flash 的时间差异
+    if len(flash_results_list) >= 2:
+        flash_off = results.get("gemini-3-flash (thinking OFF)", {})
+        flash_high = results.get("gemini-3-flash (thinking HIGH)", {})
+        if flash_off and flash_high and flash_off.get('total_time', 0) > 0:
+            time_diff = ((flash_high.get('total_time', 0) - flash_off.get('total_time', 0)) / flash_off.get('total_time', 1)) * 100
+            print(f"   时间差异: {time_diff:+.1f}% (HIGH vs OFF)")
 
     # Pro 模型对比
-    print("\n🟣 Pro 模型 - Thinking 配置对比:")
-    pro_configs = ["gemini-3-pro (thinking OFF)", "gemini-3-pro (thinking LOW)",
-                   "gemini-3-pro (thinking MEDIUM)", "gemini-3-pro (thinking HIGH)"]
+    print("\n🟣 Pro 模型 - Thinking 配置对比 (注意：Pro 无法完全关闭 thinking):")
+    pro_configs = ["gemini-3-pro (thinking LOW)", "gemini-3-pro (thinking HIGH - default)"]
     for config_name in pro_configs:
         config_data = results.get(config_name, {})
         if config_data:
-            print(f"   {config_name:<30} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
+            print(f"   {config_name:<35} - 总时间: {config_data.get('total_time', 0):>6.3f}秒, 总长度: {config_data.get('total_length', 0):>5}字")
 
     print("\n" + "=" * 120 + "\n")
 
@@ -353,7 +365,8 @@ def save_results(results: Dict):
             {
                 'name': config['name'],
                 'model': config['model'],
-                'thinking_config': config.get('thinking_config')
+                'thinking_level': config.get('thinking_level'),
+                'thinking_budget': config.get('thinking_budget')
             }
             for config in MODEL_CONFIGS
         ],
