@@ -21,7 +21,9 @@ client = genai.Client(api_key=API_KEY)
 # 测试模型列表
 MODELS = [
     "gemini-3-flash-preview",
-    "gemini-3-pro-preview"
+    "gemini-3-pro-preview",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash"
 ]
 
 # 两轮对话的提示词
