@@ -32,24 +32,24 @@ MODEL_CONFIGS = [
     {
         "name": "gemini-3-flash (thinking LOW)",
         "model": "gemini-3-flash-preview",
-        "thinking_level": "LOW"
+        "thinking_level": types.ThinkingLevel.LOW  # 使用枚举类型
     },
     {
         "name": "gemini-3-flash (thinking HIGH)",
         "model": "gemini-3-flash-preview",
-        "thinking_level": "HIGH"
+        "thinking_level": types.ThinkingLevel.HIGH  # 使用枚举类型
     },
 
     # Pro 模型：只能测试 LOW 和 HIGH（无法完全关闭）
     {
         "name": "gemini-3-pro (thinking LOW)",
         "model": "gemini-3-pro-preview",
-        "thinking_level": "LOW"
+        "thinking_level": types.ThinkingLevel.LOW  # 使用枚举类型
     },
     {
         "name": "gemini-3-pro (thinking HIGH - default)",
         "model": "gemini-3-pro-preview",
-        "thinking_level": "HIGH"  # 这是默认值
+        "thinking_level": types.ThinkingLevel.HIGH  # 使用枚举类型，这是默认值
     },
 ]
 
@@ -63,14 +63,14 @@ PROMPTS = [
 # 每个请求会等待完全完成后才开始下一个
 
 
-def test_model_with_timing(model: str, prompt: str, thinking_level: Optional[str] = None, thinking_budget: Optional[int] = None) -> Dict:
+def test_model_with_timing(model: str, prompt: str, thinking_level = None, thinking_budget: Optional[int] = None) -> Dict:
     """
     测试单个模型的响应，记录详细时间数据
 
     Args:
         model: 模型ID
         prompt: 提示词
-        thinking_level: thinking 级别（"LOW" 或 "HIGH"）
+        thinking_level: thinking 级别（types.ThinkingLevel.LOW 或 types.ThinkingLevel.HIGH）
         thinking_budget: thinking 预算（整数，0 表示关闭）
 
     Returns:
@@ -96,17 +96,17 @@ def test_model_with_timing(model: str, prompt: str, thinking_level: Optional[str
 
         # 如果提供了 thinking 配置，添加到 config 中
         if thinking_level is not None or thinking_budget is not None:
-            thinking_config_dict = {}
+            thinking_config_kwargs = {}
 
             if thinking_budget is not None:
-                thinking_config_dict["thinking_budget"] = thinking_budget
+                thinking_config_kwargs["thinking_budget"] = thinking_budget
                 print(f"    [调试] Thinking 配置: thinking_budget={thinking_budget}")
             elif thinking_level is not None:
-                thinking_config_dict["thinking_level"] = thinking_level
+                thinking_config_kwargs["thinking_level"] = thinking_level
                 print(f"    [调试] Thinking 配置: thinking_level={thinking_level}")
 
             request_params["config"] = types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(**thinking_config_dict)
+                thinking_config=types.ThinkingConfig(**thinking_config_kwargs)
             )
 
         # 使用流式响应来获取首字延时
