@@ -1,5 +1,6 @@
 *.pem
 .env
 test_results_*.json
+ssh_login.sh
 __pycache__/
 *.pyc
