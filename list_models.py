@@ -5,8 +5,10 @@
 
 from google import genai
 
+API_KEY = "AIzaSyCwZrY_wdEnT_g8mWsvTc3kjFZg7h1HsVY"
+
 try:
-    client = genai.Client()
+    client = genai.Client(api_key=API_KEY)
 
     print("\n" + "=" * 80)
     print("📋 可用的 Gemini 模型列表")
