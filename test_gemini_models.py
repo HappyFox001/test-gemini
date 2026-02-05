@@ -18,12 +18,12 @@ if not API_KEY:
 
 client = genai.Client(api_key=API_KEY)
 
-# 测试模型列表
+# 测试模型列表（串行测试，一个完成后才测下一个）
 MODELS = [
+    "gemini-2.5-flash",
     "gemini-3-flash-preview",
     "gemini-3-pro-preview",
     "gemini-2.5-pro",
-    "gemini-2.5-flash"
 ]
 
 # 两轮对话的提示词
@@ -32,8 +32,8 @@ PROMPTS = [
     "谢谢你的建议，我该如何开始改善这个状况呢？"
 ]
 
-# 对话间隔时间（秒）
-CONVERSATION_GAP = 0.5
+# 不使用硬编码的等待时间，完全依赖同步执行
+# 每个请求会等待完全完成后才开始下一个
 
 
 def test_model_with_timing(model: str, prompt: str) -> Dict:
@@ -98,39 +98,64 @@ def test_model_with_timing(model: str, prompt: str) -> Dict:
 
     except Exception as e:
         total_time = time.time() - start_time
+        error_msg = str(e)
+        print(f"    [错误] {error_msg}")
         return {
+            'first_chunk_time': 0,
             'first_token_time': 0,
             'total_time': total_time,
             'response_length': 0,
-            'response_text': f"错误: {str(e)}",
-            'error': str(e)
+            'chunk_count': 0,
+            'response_text': f"错误: {error_msg}",
+            'error': error_msg
         }
+
+
+def test_network_latency():
+    """测试网络延迟"""
+    print("\n🌐 测试网络延迟到 Google API...")
+    try:
+        import urllib.request
+        start = time.time()
+        urllib.request.urlopen('https://generativelanguage.googleapis.com', timeout=10)
+        latency = time.time() - start
+        print(f"   网络延迟: {latency:.3f}秒")
+        if latency > 1:
+            print(f"   ⚠️  网络延迟较高 (>{latency:.1f}秒)")
+        return latency
+    except Exception as e:
+        print(f"   ❌ 网络测试失败: {e}")
+        return None
 
 
 def run_performance_test():
     """运行性能测试"""
     print("\n" + "=" * 80)
-    print("🚀 Gemini 模型延时性能测试")
+    print("🚀 Gemini 模型延时性能测试 (完全串行)")
     print("=" * 80)
     print(f"📅 测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 测试模型: {', '.join(MODELS)}")
+    print(f"🎯 测试模型: {len(MODELS)} 个")
+    print(f"    {', '.join(MODELS)}")
     print(f"💬 对话轮数: {len(PROMPTS)}")
-    print(f"⏱️  对话间隔: {CONVERSATION_GAP}秒")
+    print(f"🔄 执行模式: 完全串行 (每个请求完成后才开始下一个)")
+    print("=" * 80)
+
+    # 测试网络延迟
+    test_network_latency()
     print("=" * 80 + "\n")
 
     # 存储所有结果
     all_results = {}
 
-    # 测试每个模型
-    for model in MODELS:
-        print(f"📊 测试模型: {model}")
+    # 串行测试每个模型（一个完成后才开始下一个）
+    for model_idx, model in enumerate(MODELS, 1):
+        print(f"📊 测试模型 {model_idx}/{len(MODELS)}: {model}")
         print("-" * 80)
 
         model_results = {
             'conversations': [],
             'total_length': 0,
-            'total_time': 0,
-            'gaps': []
+            'total_time': 0
         }
 
         # 进行两轮对话
@@ -152,16 +177,17 @@ def run_performance_test():
             model_results['total_length'] += result['response_length']
             model_results['total_time'] += result['total_time']
 
-            # 如果不是最后一轮，等待并记录间隔
+            # 不添加人工等待，直接进入下一轮（自然串行执行）
             if round_num < len(PROMPTS):
-                gap_start = time.time()
-                time.sleep(CONVERSATION_GAP)
-                actual_gap = time.time() - gap_start
-                model_results['gaps'].append(actual_gap)
-                print(f"\n⏸️  对话间隔: {actual_gap:.3f}秒")
+                print()
 
         all_results[model] = model_results
-        print("\n" + "=" * 80 + "\n")
+
+        # 不添加人工等待，当前模型完成后自动开始下一个
+        if model_idx < len(MODELS):
+            print(f"\n✅ {model} 测试完成，开始下一个模型...\n")
+
+        print("=" * 80 + "\n")
 
     # 打印对比表格
     print_comparison_table(all_results)
@@ -196,11 +222,7 @@ def print_comparison_table(results: Dict):
     print(f"{'[第1轮] 首字延时':<20} {flash_conv1.get('first_token_time', 0):.3f}秒{'':<13} {pro_conv1.get('first_token_time', 0):.3f}秒")
     print(f"{'[第1轮] 总时间':<20} {flash_conv1.get('total_time', 0):.3f}秒{'':<13} {pro_conv1.get('total_time', 0):.3f}秒")
     print(f"{'[第1轮] 响应长度':<20} {flash_conv1.get('response_length', 0)}字符{'':<13} {pro_conv1.get('response_length', 0)}字符")
-
-    # 对话间隔
-    flash_gap = flash_results.get('gaps', [0])[0] if flash_results.get('gaps') else 0
-    pro_gap = pro_results.get('gaps', [0])[0] if pro_results.get('gaps') else 0
-    print(f"{'对话间隔':<20} {flash_gap:.3f}秒{'':<13} {pro_gap:.3f}秒")
+    print()
 
     # 第二轮对话数据
     flash_conv2 = flash_results.get('conversations', [{}])[1] if len(flash_results.get('conversations', [])) > 1 else {}
@@ -239,13 +261,14 @@ def save_results(results: Dict):
             'total_time': data['total_time'],
             'conversations': [
                 {
+                    'first_chunk_time': conv.get('first_chunk_time', 0),
                     'first_token_time': conv.get('first_token_time', 0),
                     'total_time': conv.get('total_time', 0),
-                    'response_length': conv.get('response_length', 0)
+                    'response_length': conv.get('response_length', 0),
+                    'chunk_count': conv.get('chunk_count', 0)
                 }
                 for conv in data['conversations']
-            ],
-            'gaps': data.get('gaps', [])
+            ]
         }
 
     output = {
