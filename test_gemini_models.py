@@ -57,13 +57,20 @@ def test_model_with_timing(model: str, prompt: str) -> Dict:
             contents=prompt,
         )
 
-        # 接收第一个 token
+        # 接收流式响应
         for chunk in response:
+            # 记录首字延时（第一个 chunk 到达时间）
             if first_token_time is None:
                 first_token_time = time.time() - start_time
 
-            if hasattr(chunk, 'text'):
-                response_text += chunk.text
+            # 提取文本内容
+            if hasattr(chunk, 'candidates') and chunk.candidates:
+                candidate = chunk.candidates[0]
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    for part in candidate.content.parts:
+                        # 只提取文本部分，忽略 thought_signature 等
+                        if hasattr(part, 'text') and part.text:
+                            response_text += part.text
 
         total_time = time.time() - start_time
 
