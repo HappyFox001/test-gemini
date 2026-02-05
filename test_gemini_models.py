@@ -11,7 +11,7 @@ from google import genai
 from typing import Dict, List, Tuple
 
 # 初始化客户端
-API_KEY = "AIzaSyCxyrthRXXj15jjxwW31IBzCcoVSP36MxY"
+API_KEY = "AIzaSyCxyrthRXXj15jjxwW31IBzCcoVSP36MxY11"
 client = genai.Client(api_key=API_KEY)
 
 # 测试模型列表
