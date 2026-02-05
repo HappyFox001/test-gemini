@@ -79,7 +79,7 @@ PROMPTS = [
 ]
 
 # 输出 token 限制
-MAX_OUTPUT_TOKENS = 50  # 约等于 10 个中文字
+MAX_OUTPUT_TOKENS = 1000  # 约等于 10 个中文字
 
 # 不使用硬编码的等待时间，完全依赖同步执行
 # 每个请求会等待完全完成后才开始下一个
